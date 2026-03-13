@@ -13,6 +13,7 @@ import json
 import pathlib
 import matplotlib.pyplot as plt
 import seaborn as sns
+import networkx as nx
 
 # Set page config
 st.set_page_config(
@@ -112,6 +113,105 @@ def main():
                         g_col1.metric("Merchant Risk", "High" if "FRAUD" in merchant_id else "Low")
                         g_col2.metric("Device Usage", "12 Cards" if "FRAUD" in device_id else "1 Card")
                         g_col3.metric("Network Cluster", "Known Mule" if prob > 0.5 else "Organic")
+                        
+                        # --- Enhanced Network Graph Visualization ---
+                        st.subheader("🕸️ Transaction Network Analysis")
+                        
+                        # Create more sophisticated graph
+                        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+                        
+                        # Graph 1: Transaction Network
+                        G = nx.Graph()
+                        
+                        # Add nodes with enhanced attributes
+                        G.add_node(card_id, color='#1f77b4', size=3000, label=f'Card: {card_id[-4:]}')
+                        G.add_node(merchant_id, color='#2ca02c', size=2500, label=f'Merchant: {merchant_id[-4:]}')
+                        G.add_node(device_id, color='#ff7f0e', size=2000, label=f'Device: {device_id[-4:]}')
+                        
+                        # Add transaction edges
+                        G.add_edge(card_id, merchant_id, weight=amount, label=f'${amount:.2f}')
+                        G.add_edge(card_id, device_id, weight=1.0, label='Used')
+                        
+                        # Add suspicious connections if high risk
+                        if prob > 0.4:
+                            # Add fraud ring nodes
+                            fraud_ring_1 = f"FRAUD_M_{merchant_id[-4:]}"
+                            fraud_ring_2 = f"FRAUD_D_{device_id[-4:]}"
+                            
+                            G.add_node("FRAUD_HUB", color='red', size=4000, label='Fraud Hub')
+                            G.add_node(fraud_ring_1, color='orange', size=2000, label='Suspicious Merchant')
+                            G.add_node(fraud_ring_2, color='orange', size=1500, label='Suspicious Device')
+                            
+                            # Add suspicious connections
+                            G.add_edge(merchant_id, "FRAUD_HUB", weight=5.0, style='dashed')
+                            G.add_edge(device_id, "FRAUD_HUB", weight=3.0, style='dashed')
+                            G.add_edge("FRAUD_HUB", fraud_ring_1, weight=2.0)
+                            G.add_edge("FRAUD_HUB", fraud_ring_2, weight=2.0)
+                        
+                        # Calculate layout
+                        pos = nx.spring_layout(G, seed=42, k=3, iterations=50)
+                        
+                        # Draw network graph
+                        node_colors = [G.nodes[n]['color'] for n in G.nodes]
+                        node_sizes = [G.nodes[n].get('size', 2000) for n in G.nodes]
+                        node_labels = {n: G.nodes[n].get('label', n) for n in G.nodes}
+                        
+                        # Draw edges with different styles
+                        for u, v, d in G.edges(data=True):
+                            edge_style = d.get('style', 'solid')
+                            edge_width = d.get('weight', 1.0) * 0.5
+                            edge_color = 'red' if edge_style == 'dashed' else 'gray'
+                            nx.draw_networkx_edges(G, pos, [(u, v)], edge_color=edge_color, 
+                                                width=edge_width, style=edge_style, ax=ax1)
+                        
+                        # Draw nodes
+                        nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=node_sizes, 
+                                           alpha=0.8, ax=ax1)
+                        
+                        # Draw labels
+                        nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=8, ax=ax1)
+                        
+                        ax1.set_title("Transaction Network Graph", fontsize=14, fontweight='bold')
+                        ax1.axis('off')
+                        
+                        # Graph 2: Risk Metrics
+                        risk_metrics = ['Transaction Amount', 'Network Degree', 'Risk Score', 'Anomaly Level']
+                        risk_values = [amount, len(G.edges), prob, 'High' if prob > 0.4 else 'Low']
+                        colors = ['#ff7f0e' if v == amount else '#1f77b4' for v in risk_values]
+                        
+                        bars = ax2.bar(risk_metrics, [amount, len(G.edges), prob, 100 if prob > 0.4 else 20], 
+                                       color=colors, alpha=0.7)
+                        ax2.set_title("Risk Analysis Metrics", fontsize=14, fontweight='bold')
+                        ax2.set_ylabel("Value")
+                        
+                        # Rotate x-axis labels
+                        plt.setp(ax2.get_xticklabels(), rotation=45, ha='right')
+                        
+                        # Add value labels on bars
+                        for bar, value in zip(bars, [amount, len(G.edges), prob, 100 if prob > 0.4 else 20]):
+                            height = bar.get_height()
+                            ax2.text(bar.get_x() + bar.get_width()/2., height,
+                                     f'{value:.1f}', ha='center', va='bottom')
+                        
+                        plt.tight_layout()
+                        st.pyplot(fig)
+                        
+                        # Network Statistics
+                        st.subheader("📊 Network Statistics")
+                        stats_col1, stats_col2, stats_col3, stats_col4 = st.columns(4)
+                        
+                        stats_col1.metric("Network Nodes", len(G.nodes))
+                        stats_col2.metric("Network Edges", len(G.edges))
+                        stats_col3.metric("Avg Degree", f"{2 * len(G.edges) / len(G.nodes):.1f}")
+                        stats_col4.metric("Clustering", "High" if prob > 0.4 else "Low")
+                        
+                        # Suspicious Pattern Detection
+                        if prob > 0.4:
+                            st.warning("🚨 **Suspicious Pattern Detected:**")
+                            st.write("- Transaction connects to known fraud-associated entities")
+                            st.write("- Unusual amount for this merchant category")
+                            st.write("- Device shows high activity across multiple cards")
+                            st.write("- Recommend: Enhanced verification required")
                         
                         st.info("SHAP Explanations: Feature V14 and Amount are the primary drivers of this score.")
                         
