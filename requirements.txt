@@ -1,18 +1,40 @@
-pandas>=1.5.0
-numpy>=1.23.0
-scikit-learn>=1.1.0
-imbalanced-learn>=0.10.0
-xgboost>=1.7.0
-lightgbm>=3.3.0
-mlflow>=2.0.0
-pyyaml>=6.0
-pytest>=7.0.0
-matplotlib>=3.6.0
-seaborn>=0.12.0
-IPython
-shap>=0.41.0
-fastapi>=0.95.0
-uvicorn>=0.22.0
-joblib>=1.2.0
-streamlit>=1.28.0
-plotly>=5.15.0
+# ── Core data stack ───────────────────────────────────────────────────────────
+pandas>=2.0.0
+numpy>=1.26.0
+
+# ── ML / modelling ────────────────────────────────────────────────────────────
+scikit-learn>=1.4.0
+imbalanced-learn>=0.12.0        # SMOTE oversampling
+xgboost>=2.0.0
+lightgbm>=4.0.0
+
+# ── Experiment tracking ───────────────────────────────────────────────────────
+mlflow>=2.12.0
+
+# ── Feature engineering ───────────────────────────────────────────────────────
+networkx>=3.2.0                 # Graph features (degree centrality, bipartite graph)
+
+# ── Explainability ────────────────────────────────────────────────────────────
+shap>=0.44.0                    # SHAP summary + bar plots for tree models
+
+# ── Serving (FastAPI inference API) ───────────────────────────────────────────
+fastapi>=0.110.0
+uvicorn>=0.29.0                 # ASGI server for FastAPI
+pydantic>=2.6.0                 # Request/response schema validation
+requests>=2.31.0                # HTTP client (dashboard → API calls)
+joblib>=1.3.0                   # Model artifact serialization
+
+# ── Dashboard (Streamlit) ─────────────────────────────────────────────────────
+streamlit>=1.32.0
+plotly>=5.20.0                  # Interactive network graph, gauge, bar charts
+
+# ── Visualization (training plots) ───────────────────────────────────────────
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# ── Config ────────────────────────────────────────────────────────────────────
+pyyaml>=6.0.1                   # configs/config.yaml
+
+# ── Dev / testing ─────────────────────────────────────────────────────────────
+pytest>=8.0.0
+ipython>=8.0.0                  # Notebook / REPL support
