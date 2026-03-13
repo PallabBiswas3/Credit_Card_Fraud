@@ -15,7 +15,10 @@ pipeline.log
 mlruns/
 
 # Models
-*.pkl
+# Allowing the models/ folder for deployment
+# !models/
+# !models/*.pkl
+# *.pkl
 *.pt
 *.pth
 *.ckpt

@@ -60,7 +60,7 @@ class Preprocessor:
         df = time_to_cyclical(df.copy())
         df = fix_amount(df)
 
-        feature_cols = [c for c in df.columns if c != "Class"]
+        feature_cols = [c for c in df.columns if c not in ["Class", "card_id", "merchant_id", "device_id"]]
         df[feature_cols] = self.imputer.fit_transform(df[feature_cols])
         df[feature_cols] = self.scaler.fit_transform(df[feature_cols])
         self._fitted = True
@@ -71,7 +71,7 @@ class Preprocessor:
         assert self._fitted, "Call fit_transform on train first"
         df = time_to_cyclical(df.copy())
         df = fix_amount(df)
-        feature_cols = [c for c in df.columns if c != "Class"]
+        feature_cols = [c for c in df.columns if c not in ["Class", "card_id", "merchant_id", "device_id"]]
         df[feature_cols] = self.imputer.transform(df[feature_cols])
         df[feature_cols] = self.scaler.transform(df[feature_cols])
         return df

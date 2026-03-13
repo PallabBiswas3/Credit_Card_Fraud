@@ -13,6 +13,7 @@
 - [Challenges & Fixes — The Real Story](#-challenges--fixes--the-real-story)
 - [Actual Results From This Run](#-actual-results-from-this-run)
 - [Visualization & Analysis](#-visualization--analysis)
+- [Fraud Investigation Dashboard](#-fraud-investigation-dashboard)
 - [How to Run](#-how-to-run)
 - [Dependencies](#-dependencies)
 - [What a Full Production Stack Looks Like](#-what-a-full-production-stack-looks-like)
@@ -116,9 +117,17 @@ fraud_detection/
 │   ├── features/
 │   │   └── feature_engineering.py    ← Velocity, ratios, IV selection
 │   ├── training/
-│   │   └── train.py                   ← SMOTE, threshold tuning, MLflow
+│   │   └── train.py                   ← SMOTE, threshold tuning, MLflow, SHAP
+│   ├── explainability/
+│   │   └── shap_analysis.py           ← SHAP explanations & summary plots
+│   ├── serving/
+│   │   └── api.py                     ← FastAPI inference service
 │   └── monitoring/
 │       └── drift_monitor.py           ← PSI feature + score drift detection
+│
+├── models/                            ← Best model and preprocessor for serving
+│   ├── model.pkl
+│   └── preprocessor.pkl
 │
 ├── tests/
 │   └── test_pipeline.py               ← Unit tests for each stage
@@ -404,6 +413,59 @@ Examples:
 
 ---
 
+## 🎛️ Fraud Investigation Dashboard
+
+Transform your ML models into an interactive fraud investigation system for human analysts.
+
+### 🌟 Key Features
+
+#### **Tab 1: � Transaction Investigator**
+- **Real-time Risk Assessment**: Input transaction details and get instant fraud probability
+- **SHAP Explainability**: Understand which features drive the risk score
+- **Interactive Analysis**: "What-if" scenarios to test different transaction parameters
+- **Visual Risk Indicators**: Color-coded risk levels (Low/Medium/High)
+- **Sample Data Loading**: Quick access to fraud/legitimate transaction examples
+
+#### **Tab 2: 📊 Model Performance**
+- **Comprehensive Metrics**: PR-AUC, ROC-AUC, Recall, Precision for all models
+- **Interactive Visualizations**: Performance comparisons with Plotly charts
+- **Best Model Identification**: Automatic highlighting of top-performing model
+- **Trade-off Analysis**: Recall vs Precision scatter plots
+
+#### **Tab 3: 🛠️ System Health (MLOps)**
+- **Drift Monitoring**: Real-time PSI-based feature drift detection
+- **Traffic Light System**: Visual health status (Healthy/Warning/Critical)
+- **Feature Stability**: Detailed analysis of feature distribution changes
+- **Automated Recommendations**: System-generated retraining suggestions
+
+### � Launch Dashboard
+
+```bash
+# Install additional dependencies if needed
+pip install streamlit plotly
+
+# Run the dashboard
+streamlit run src/ui/dashboard.py
+```
+
+**Access at**: `http://localhost:8501`
+
+### 💡 Why This Adds Massive Value
+
+1. **Trust & Explainability**: Analysts see WHY a transaction is flagged, not just that it's risky
+2. **Interactivity**: Test scenarios like "What if transaction amount was $5,000?"
+3. **Monitoring**: Visualize drift so stakeholders understand model decay
+4. **Human-in-the-Loop**: Augments human analysts, doesn't replace them
+
+### 🎯 Industry Use Cases
+
+- **Fraud Investigation Teams**: Review suspicious transactions in real-time
+- **Model Monitoring**: Track model performance and drift over time
+- **Business Stakeholders**: Understand model behavior and impact
+- **Compliance**: Document decisions with explainable AI
+
+---
+
 ## 🚀 How to Run
 
 ### Step 1 — Install dependencies
@@ -438,9 +500,20 @@ python src/monitoring/drift_monitor.py
 python create_results_plot.py
 ```
 
-This creates all 38 plot files with separate training/validation/test analysis and ROC curves.
+### Step 4 — Launch Fraud Investigation Dashboard
 
-### Step 4 — View MLflow experiment tracking
+```bash
+streamlit run src/ui/dashboard.py
+```
+
+This opens the interactive dashboard in your browser at `http://localhost:8501` with:
+- **🔍 Transaction Investigator**: Real-time fraud analysis with SHAP explainability
+- **📊 Model Performance**: Comprehensive metrics and visualizations
+- **🛠️ System Health**: Drift monitoring and system status
+
+**Note:** The dashboard requires the pipeline to be run first to load models and data.
+
+### Step 5 — View MLflow experiment tracking
 
 ```bash
 mlflow ui --backend-store-uri mlruns
@@ -449,7 +522,23 @@ mlflow ui --backend-store-uri mlruns
 
 All runs are logged with parameters, metrics, and model artifacts.
 
-### Step 5 — Run tests
+### Step 6 — Run tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+### Step 7 — Run Inference API
+
+```bash
+uvicorn src.serving.api:app --reload
+```
+Test with a sample transaction:
+```bash
+curl -X POST "http://localhost:8000/predict" -H "Content-Type: application/json" -d @sample_transaction.json
+```
+
+### Step 6 — Run tests
 
 ```bash
 python -m pytest tests/ -v
@@ -504,6 +593,10 @@ The core preprocessing, feature logic, and training code in `src/` would port di
 
 ## 🎯 Key Achievements
 
+✅ **Model Explainability:** SHAP summary and importance plots for auditing
+✅ **Inference Service:** FastAPI-based REST API for real-time predictions
+✅ **Feature Importance Tracking:** Automatic extraction and storage across runs
+✅ **Advanced Experiment Tracking:** MLflow integration with artifact logging
 ✅ **Complete MLOps Pipeline:** All 5 stages implemented and tested
 ✅ **Production-Grade Preprocessing:** Zero label leakage, proper temporal splits
 ✅ **Advanced Feature Engineering:** Velocity features, IV selection, ratio features

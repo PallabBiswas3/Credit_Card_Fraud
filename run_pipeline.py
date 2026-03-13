@@ -99,12 +99,16 @@ def generate_dataset():
 def stage_ingest():
     import sys
     sys.path.insert(0, str(BASE))
-    from src.ingestion.ingest import load_raw, validate, remove_duplicates
+    from src.ingestion.ingest import load_raw, validate, remove_duplicates, simulate_ids
 
     raw_path = BASE / "data" / "creditcard_raw.csv"
     df = load_raw(str(raw_path))
     report = validate(df)
     df = remove_duplicates(df)
+    
+    # Generate ID columns for graph features
+    df = simulate_ids(df)
+    
     out = BASE / "data" / "creditcard_ingested.csv"
     df.to_csv(out, index=False)
     log.info(f"Ingested data saved → {out}  ({len(df)} rows)")

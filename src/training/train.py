@@ -48,11 +48,17 @@ import mlflow.lightgbm
 import json
 import logging
 import pathlib
-
-log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+import sys
 
 BASE = pathlib.Path(__file__).parents[2]
+if str(BASE) not in sys.path:
+    sys.path.append(str(BASE))
+
+from src.features.graph_features import GraphFeatureExtractor
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+log = logging.getLogger(__name__)
 
 
 def load_data():
@@ -121,6 +127,9 @@ def evaluate(model, X, y, threshold=0.5, model_type="sklearn"):
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
+import joblib
+import os
+from src.explainability.shap_analysis import generate_shap_explanations
 
 def save_plots(model_name, y_true, y_prob, threshold, dataset_type="test"):
     """Save PR curve, ROC curve, and Confusion Matrix for the model."""
@@ -166,12 +175,45 @@ def save_plots(model_name, y_true, y_prob, threshold, dataset_type="test"):
     plt.savefig(plots_dir / f"{model_name}_{dataset_type}_confusion_matrix.png")
     plt.close()
 
+def get_feature_importance(model, model_name, feature_names):
+    """Extract feature importance from the model."""
+    if model_name == "logistic_regression":
+        # Logistic Regression uses coefficients as importance
+        importance = np.abs(model.coef_[0])
+    elif model_name == "random_forest":
+        importance = model.feature_importances_
+    elif model_name == "xgboost":
+        importance = model.feature_importances_
+    elif model_name == "lightgbm":
+        importance = model.feature_importances_
+    else:
+        return None
+    
+    feat_imp = pd.DataFrame({
+        "feature": feature_names,
+        "importance": importance
+    }).sort_values("importance", ascending=False)
+    
+    return feat_imp
+
 def train_models():
+    # Fit and save GraphFeatureExtractor on raw training data
+    raw_train = pd.read_csv(BASE / "data" / "train.csv")
+    graph_extractor = GraphFeatureExtractor()
+    graph_extractor.fit(raw_train)
+    
+    # Create models directory if it doesn't exist
+    (BASE / "models").mkdir(exist_ok=True)
+    
+    joblib.dump(graph_extractor, BASE / "models" / "graph_extractor.pkl")
+    log.info("Graph Feature Extractor saved to models/graph_extractor.pkl")
+
     train, val, test = load_data()
     X_train, y_train = split_xy(train)
     X_val, y_val = split_xy(val)
     X_test, y_test = split_xy(test)
 
+    feature_names = X_train.columns.tolist()
     X_train_sm, y_train_sm = apply_smote(X_train, y_train)
 
     scale_pos = int((y_train == 0).sum() / max((y_train == 1).sum(), 1))
@@ -200,6 +242,7 @@ def train_models():
     mlflow.set_experiment("fraud_detection")
 
     results = {}
+    best_models_objects = {}
 
     for name, model in models.items():
         log.info(f"\n{'='*50}\nTraining: {name}\n{'='*50}")
@@ -246,6 +289,21 @@ def train_models():
             save_plots(name, y_val, y_prob_val, best_thresh, "validation")
             save_plots(name, y_test, y_prob_test, best_thresh, "test")
             save_plots(name, current_y_train, y_prob_train, best_thresh, "training")
+            
+            # 1. Feature Importance
+            feat_imp = get_feature_importance(model, name, feature_names)
+            if feat_imp is not None:
+                feat_imp_path = BASE / "data" / f"feature_importance_{name}.json"
+                feat_imp.to_json(feat_imp_path, orient="records")
+                mlflow.log_artifact(str(feat_imp_path))
+                log.info(f"Feature importance saved for {name}")
+
+            # 2. SHAP Explanations
+            generate_shap_explanations(model, X_test, model_name=name)
+            shap_plots_dir = BASE / "data" / "plots" / "shap"
+            for plot_file in os.listdir(shap_plots_dir):
+                if plot_file.startswith(name):
+                    mlflow.log_artifact(str(shap_plots_dir / plot_file))
 
             # Evaluate
             model_type_code = "lgb" if name == "lightgbm" else ("xgb" if name == "xgboost" else "sklearn")
@@ -268,15 +326,37 @@ def train_models():
                 "test": test_metrics,
                 "threshold": round(best_thresh, 4)
             }
+            best_models_objects[name] = model
 
             log.info(f"Val PR-AUC: {val_metrics['pr_auc']} | Test PR-AUC: {test_metrics['pr_auc']}")
 
     # Save results summary
-    with open(BASE / "data" / "training_results.json", "w") as f:
+    results_path = BASE / "data" / "training_results.json"
+    with open(results_path, "w") as f:
         json.dump(results, f, indent=2)
 
-    best_model = max(results, key=lambda k: results[k]["val"]["pr_auc"])
-    log.info(f"\nBest model: {best_model} (val PR-AUC: {results[best_model]['val']['pr_auc']})")
+    best_model_name = max(results, key=lambda k: results[k]["val"]["pr_auc"])
+    log.info(f"\nBest model: {best_model_name} (val PR-AUC: {results[best_model_name]['val']['pr_auc']})")
+    
+    # Save the best model and preprocessor for serving
+    models_dir = BASE / "models"
+    models_dir.mkdir(exist_ok=True)
+    best_model = best_models_objects[best_model_name]
+    joblib.dump(best_model, models_dir / "model.pkl")
+    
+    # Save consolidated feature importance for the best model
+    best_feat_imp = get_feature_importance(best_model, best_model_name, feature_names)
+    if best_feat_imp is not None:
+        best_feat_imp.to_json(BASE / "data" / "feature_importance.json", orient="records")
+        log.info("Consolidated feature importance for best model saved to data/feature_importance.json")
+    
+    # Copy preprocessor if it exists
+    preprocessor_path = BASE / "data" / "preprocessor.pkl"
+    if preprocessor_path.exists():
+        import shutil
+        shutil.copy(preprocessor_path, models_dir / "preprocessor.pkl")
+        log.info(f"Best model ({best_model_name}) and preprocessor saved to {models_dir}")
+        
     return results
 
 

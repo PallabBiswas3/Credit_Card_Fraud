@@ -26,6 +26,15 @@ CHALLENGES FACED:
 import pandas as pd
 import numpy as np
 import logging
+import sys
+import pathlib
+
+# Add root to sys.path for local imports
+BASE = pathlib.Path(__file__).parents[2]
+if str(BASE) not in sys.path:
+    sys.path.append(str(BASE))
+
+from src.features.graph_features import add_graph_features
 
 log = logging.getLogger(__name__)
 
@@ -118,13 +127,18 @@ def select_features(df: pd.DataFrame, iv_threshold: float = 0.02) -> list:
 def build_features(train: pd.DataFrame, val: pd.DataFrame, test: pd.DataFrame):
     """
     Safe feature pipeline: velocity computed without future leakage.
+    Now includes Graph Features.
     """
+    # 1. Graph Features (fit on train, apply to all)
+    train_f, val_f, test_f = add_graph_features(train, val, test)
+    
+    # 2. Velocity features (safe ordering)
     # Combine for velocity (train context only bleeds into val, not the other way)
-    full = pd.concat([train, val, test], ignore_index=True)
+    full = pd.concat([train_f, val_f, test_f], ignore_index=True)
     full = add_velocity_features(full)
 
-    n_train = len(train)
-    n_val = len(val)
+    n_train = len(train_f)
+    n_val = len(val_f)
 
     train_f = full.iloc[:n_train].copy()
     val_f = full.iloc[n_train:n_train + n_val].copy()
@@ -133,6 +147,10 @@ def build_features(train: pd.DataFrame, val: pd.DataFrame, test: pd.DataFrame):
     for part in [train_f, val_f, test_f]:
         add_amount_features(part)
         add_ratio_features(part)
+
+    # 3. Drop Entity IDs (not used for training, just for feature derivation)
+    for part in [train_f, val_f, test_f]:
+        part.drop(columns=["card_id", "merchant_id", "device_id"], inplace=True)
 
     # Select features based on TRAIN only
     selected_cols = select_features(train_f)
